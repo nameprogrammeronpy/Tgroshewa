@@ -3,6 +3,7 @@ import logging
 import os
 import random
 from dotenv import load_dotenv
+from aiohttp import web
 
 from aiogram import Bot, Dispatcher, F, Router
 from aiogram.filters import Command
@@ -1144,6 +1145,28 @@ async def toggle_notifications(callback: CallbackQuery):
     await callback.answer(f"Уведомления {status}")
 
 
+# ========== HTTP сервер для health checks ==========
+async def health_check(request):
+    """Endpoint для health check Koyeb"""
+    return web.Response(text="OK", status=200)
+
+
+async def run_web_server():
+    """Запуск веб-сервера на порту 8000 для health checks"""
+    app = web.Application()
+    app.router.add_get("/", health_check)
+    app.router.add_get("/health", health_check)
+
+    runner = web.AppRunner(app)
+    await runner.setup()
+
+    port = int(os.getenv("PORT", 8000))
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
+
+    logger.info(f"Web server started on port {port}")
+
+
 # ========== Запуск бота ==========
 async def main():
     # Инициализация базы данных
@@ -1153,6 +1176,9 @@ async def main():
     await db.restore_marathons()
 
     logger.info("Bot started!")
+
+    # Запуск веб-сервера для health checks
+    asyncio.create_task(run_web_server())
 
     # Запуск polling
     await dp.start_polling(bot)
